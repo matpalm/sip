@@ -1,0 +1,7 @@
+on the train project to attempt to copy amazons statistically improbable phrase calculations
+data from project gutenberg, runs using hadoop streaming with ruby map/reduce functions
+
+bash> hadoop fs -put input.eg input
+bash> ./sip.rb
+bash> hadoop fs -get term_freq term_freq 
+bash> zcat term_freq/part-00000.gz
