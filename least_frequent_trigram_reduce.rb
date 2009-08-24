@@ -6,7 +6,7 @@ min_trigram = nil
 
 STDIN.each do |record|
 	record =~ /(.*)\t(.*?) (.*)/
-	doc,freq,trigram = $1, $2.to_i, $3
+	doc,freq,trigram = $1, $2.to_f, $3
 
 	if doc != processing_doc
 		if processing_doc != nil
