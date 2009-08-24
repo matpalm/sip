@@ -1,7 +1,9 @@
 on the train project to attempt to copy amazons statistically improbable phrase calculations
 data from project gutenberg, runs using hadoop streaming with ruby map/reduce functions
 
-bash> hadoop fs -put input.eg input
-bash> ./sip.rb
-bash> hadoop fs -get term_freq term_freq 
-bash> zcat term_freq/part-00000.gz
+bash> start-hadoop-here
+bash> rake insert_filename_at_start_and_remove_blanks input=input.eg # upload 8 file example
+bash> rake upload_input
+bash> rake calc_least_frequent_trigram 
+bash> rake cat DIR=least_frequent_trigram
+bash> # bask in glow of diysips
