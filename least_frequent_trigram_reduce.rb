@@ -2,7 +2,7 @@
 
 processing_doc = nil
 min_freq = nil
-min_trigram = nil
+min_trigram = []
 
 STDIN.each do |record|
 	record =~ /(.*)\t(.*?) (.*)/
@@ -10,19 +10,21 @@ STDIN.each do |record|
 
 	if doc != processing_doc
 		if processing_doc != nil
-			puts "#{processing_doc}\t#{min_freq} #{min_trigram}"
+			puts "#{processing_doc}\t#{min_freq} #{min_trigram.join(', ')}"
 		end
 		processing_doc = doc
 		min_freq = freq
-		min_trigram = trigram
-	else
-		if freq < min_freq
+		min_trigram = [trigram]
+	else		
+		if freq == min_freq
+			min_trigram << trigram
+		elsif freq < min_freq
 			min_freq = freq
-			min_trigram = trigram
+			min_trigram = [trigram]
 		end
 	end
 
 end			
 
-puts "#{processing_doc}\t#{min_freq} #{min_trigram}"
+puts "#{processing_doc}\t#{min_freq} #{min_trigram.join(', ')}"
 
