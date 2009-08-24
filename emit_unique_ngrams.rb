@@ -1,8 +1,8 @@
 #!/usr/bin/env ruby
 def emit docid, tuple
-		puts "LongValueSum:#{docid} #{tuple.join(' ')}\t1"	
+		puts "UniqValueCount:#{docid} #{tuple.join(' ')}\t1"	
 end
-raise "no longer used?"
+
 NGRAM_SIZE = 3
 
 STDIN.each do |line|
