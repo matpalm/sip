@@ -6,20 +6,24 @@ end
 NGRAM_SIZE = 3
 
 STDIN.each do |line|
-	line =~ /(.*?) (.*)/	
-	file, data = $1, $2
+	begin
+		line =~ /(.*?) (.*)/	
+		file, data = $1, $2
 
-	terms = data.downcase.gsub(/\'/,'').gsub(/[^a-z0-9]/,' ').strip.split
-	next if terms.size < NGRAM_SIZE
+		terms = data.downcase.gsub(/\'/,'').gsub(/[^a-z0-9]/,' ').strip.split
+		next if terms.size < NGRAM_SIZE
 	
-	tuple = []
-	NGRAM_SIZE.times { tuple << terms.shift }
-	emit file, tuple
-
-	while not terms.empty?
-		tuple.shift
-		tuple << terms.shift
+		tuple = []
+		NGRAM_SIZE.times { tuple << terms.shift }
 		emit file, tuple
-	end
 
+		while not terms.empty?
+			tuple.shift
+			tuple << terms.shift
+			emit file, tuple
+		end
+	rescue
+		#STDERR.puts "problem with line [#{line.chomp}] ??"
+		raise "problem with line [#{line.chomp}] ??"
+	end
 end

@@ -40,51 +40,53 @@ task :upload_input do
 	run "hadoop fs -ls"
 end
 
-desc "run everything sans upload_input"
-task :calc_least_frequent_trigram => 
-	[	:term_frequencies, 
-		:trigrams, :exploded_trigrams, 
-		:trigram_frequency, :trigram_frequency_sum, :least_frequent_trigram ]
-
-task :term_frequencies do
-	run hadoop "input", "term_frequencies", 
-		"/home/mat/dev/sip/emit_terms.rb",
-		"aggregate"
-end
-
-task :trigrams do
-	run hadoop "input", "trigrams", 
-		"/home/mat/dev/sip/emit_unique_ngrams.rb",
-		"aggregate"
-end
-
-task :exploded_trigrams do
-	run hadoop "trigrams", "exploded_trigrams",
-		"/home/mat/dev/sip/explode_trigrams.rb",
-		"/bin/cat"
-end
-
-task :trigram_frequency do
-	run hadoop "term_frequencies exploded_trigrams", "trigram_frequency",
-		"/bin/cat",
-		"/home/mat/dev/sip/join_trigram_frequency.rb"
-end
-
-task :trigram_frequency_sum do
-	run hadoop "trigram_frequency", "trigram_frequency_sum",
-		"/home/mat/dev/sip/double_value_sum.rb",
-		"aggregate"
-end
-
-task :least_frequent_trigram do
-	run hadoop "trigram_frequency_sum", "least_frequent_trigram",
-		"/home/mat/dev/sip/least_frequent_trigram_map.rb",
-		"/home/mat/dev/sip/least_frequent_trigram_reduce.rb"
-end
-
 desc "cat DIR/*gz from hdfs"
 task :cat do
 	raise "DIR=?" unless ENV['DIR']
 	run "hadoop fs -cat #{ENV['DIR']}/part* | gunzip "
+end
+
+namespace :term_frequency do
+	desc "run everything sans upload_input"
+	task :calculate_sips => 
+		[	:term_frequencies, 
+			:trigrams, :exploded_trigrams, 
+			:trigram_frequency, :trigram_frequency_sum, :least_frequent_trigram ]
+
+	task :term_frequencies do
+		run hadoop "input", "term_frequencies", 
+			"/home/mat/dev/sip/emit_terms.rb",
+			"aggregate"
+	end
+
+	task :trigrams do
+		run hadoop "input", "trigrams", 
+			"/home/mat/dev/sip/emit_unique_ngrams.rb",
+			"aggregate"
+	end
+
+	task :exploded_trigrams do
+		run hadoop "trigrams", "exploded_trigrams",
+			"/home/mat/dev/sip/explode_trigrams.rb",
+			"/bin/cat"
+	end
+
+	task :trigram_frequency do
+		run hadoop "term_frequencies exploded_trigrams", "trigram_frequency",
+			"/bin/cat",
+			"/home/mat/dev/sip/join_trigram_frequency.rb"
+	end
+
+	task :trigram_frequency_sum do
+		run hadoop "trigram_frequency", "trigram_frequency_sum",
+			"/home/mat/dev/sip/double_value_sum.rb",
+			"aggregate"
+	end
+
+	task :least_frequent_trigram do
+		run hadoop "trigram_frequency_sum", "least_frequent_trigram",
+			"/home/mat/dev/sip/least_frequent_trigram_map.rb",
+			"/home/mat/dev/sip/least_frequent_trigram_reduce.rb"
+	end
 end
 
