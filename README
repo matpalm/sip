@@ -1,6 +1,8 @@
 on the train project to attempt to copy amazons statistically improbable phrase calculations
 data from project gutenberg, runs using hadoop streaming with ruby map/reduce functions
 
+see project page at http://matpalm.com/sip
+
 bash> start-hadoop-here
 bash> rake insert_filename_at_start_and_remove_blanks input=input.eg # upload 8 file example
 bash> rake upload_input
