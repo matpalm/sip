@@ -5,19 +5,19 @@ def run cmd
 	puts `#{cmd}`
 end
 
-def hadoop input, output, mapper, reducer
-	run "hadoop fs -rmr #{output}"
-	run "rm -r #{output}"
+def hadoop input, output, mapper, reducer, extra = ''
+	run "hadoop fs -rmr #{output}" # when running against cluster
+	run "rm -r #{output}"          # when running as single node
 	cmd = [ "$HADOOP_HOME/bin/hadoop",
 			"jar $HADOOP_HOME/contrib/streaming/hadoop-0.20.0-streaming.jar",
 			"-D mapred.output.compress=true",
 			"-D mapred.output.compression.codec=org.apache.hadoop.io.compress.GzipCodec",
 			"-output \"#{output}\" ",
 			"-mapper #{mapper} ",
-			"-reducer #{reducer}"
+			"-reducer #{reducer}",
 		]
 	input.split.each { |i| cmd << "-input \"#{i}\" " }
-	cmd.join(' ')	
+	cmd.join(' ')	+ extra
 end
 
 desc "insert_filename_at_start_and_remove_blanks input=input. outputs to hadoop_input"
@@ -46,16 +46,27 @@ task :cat do
 	run "hadoop fs -cat #{ENV['DIR']}/part* | gunzip "
 end
 
+def total_num_terms
+	cmd = "zcat total_num_terms/part* | perl -plne's/.*\t//'"
+	`#{cmd}`.to_i
+end
+
 namespace :term_frequency do
 	desc "run everything sans upload_input"
 	task :calculate_sips => 
-		[	:term_frequencies, 
+		[	:term_frequencies, :total_num_terms,
 			:trigrams, :exploded_trigrams, 
 			:trigram_frequency, :trigram_frequency_sum, :least_frequent_trigram ]
 
 	task :term_frequencies do
 		run hadoop "input", "term_frequencies", 
 			"/home/mat/dev/sip/emit_terms.rb",
+			"aggregate"
+	end
+
+	task :total_num_terms do
+		run hadoop "term_frequencies", "total_num_terms", 
+			"/home/mat/dev/sip/count_total_num_terms.rb",
 			"aggregate"
 	end
 
@@ -74,7 +85,8 @@ namespace :term_frequency do
 	task :trigram_frequency do
 		run hadoop "term_frequencies exploded_trigrams", "trigram_frequency",
 			"/bin/cat",
-			"/home/mat/dev/sip/join_trigram_frequency.rb"
+			"/home/mat/dev/sip/join_trigram_frequency.rb",
+			"-cmdenv TOTAL_NUM_TERMS=#{total_num_terms}"
 	end
 
 	task :trigram_frequency_sum do
