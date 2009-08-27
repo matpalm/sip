@@ -99,8 +99,8 @@ namespace :term_frequency do
 
 	task :least_frequent_trigrams do
 		run hadoop "trigram_frequency_sum", "least_frequent_trigrams",
-			"/home/mat/dev/sip/least_frequent_trigram_map.rb",
-			"/home/mat/dev/sip/least_frequent_trigram_reduce.rb"
+			"/home/mat/dev/sip/least_frequent_trigrams_map.rb",
+			"/home/mat/dev/sip/least_frequent_trigrams_reduce.rb"
 	end
 end
 
