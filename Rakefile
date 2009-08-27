@@ -29,7 +29,8 @@ task :insert_filename_at_start_and_remove_blanks do
 	`ls #{input}`.each do |filename|
 		filename.chomp!
 		prefix = filename.sub '.txt.gz', ''
-		run "zcat #{input}/#{filename} | perl -ne'next if /^\\s+$/;s/^/#{prefix} /;print $_' | gzip - > #{output}/#{filename}"
+#		run "zcat #{input}/#{filename} | perl -ne'next if /^\\s+$/;s/^/#{prefix} /;print $_' | gzip - > #{output}/#{filename}"
+		run "zcat #{input}/#{filename} | perl -ne'chomp;print \"$_ \"' | perl -plne's/^/#{prefix} /' | gzip - > #{output}/#{filename}"
 	end
 end
 
@@ -47,6 +48,7 @@ task :cat do
 end
 
 def total_num_terms
+	run "hadoop fs -get total_num_terms total_num_terms"
 	cmd = "zcat total_num_terms/part* | perl -plne's/.*\t//'"
 	`#{cmd}`.to_i
 end
@@ -56,7 +58,7 @@ namespace :term_frequency do
 	task :calculate_sips => 
 		[	:term_frequencies, :total_num_terms,
 			:trigrams, :exploded_trigrams, 
-			:trigram_frequency, :trigram_frequency_sum, :least_frequent_trigram ]
+			:trigram_frequency, :trigram_frequency_sum, :least_frequent_trigrams ]
 
 	task :term_frequencies do
 		run hadoop "input", "term_frequencies", 
@@ -95,8 +97,8 @@ namespace :term_frequency do
 			"aggregate"
 	end
 
-	task :least_frequent_trigram do
-		run hadoop "trigram_frequency_sum", "least_frequent_trigram",
+	task :least_frequent_trigrams do
+		run hadoop "trigram_frequency_sum", "least_frequent_trigrams",
 			"/home/mat/dev/sip/least_frequent_trigram_map.rb",
 			"/home/mat/dev/sip/least_frequent_trigram_reduce.rb"
 	end

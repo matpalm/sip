@@ -9,7 +9,7 @@ bash> rake upload_input
 
 experiment take 2: term frequencies
 bash> rake term_frequency:calc_sips 
-bash> rake cat DIR=least_frequent_trigram
+bash> rake cat DIR=least_frequent_trigrams
 
 experiment take 3: markov chains
 *work in progress*
