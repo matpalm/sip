@@ -11,7 +11,7 @@ STDIN.each do |record|
 	doc,freq,trigram = $1, $2.to_f, $3
 	if doc != processing_doc
 		if processing_doc != nil
-			puts "#{processing_doc}\t#{min_freq} #{min_trigrams.inspect}"
+			puts "#{processing_doc}\t#{min_trigrams.inspect}"
 		end
 		processing_doc = doc
 		min_freq = max_freq = freq
@@ -31,5 +31,5 @@ STDIN.each do |record|
 	end
 end			
 
-puts "#{processing_doc}\t#{min_freq} #{min_trigrams.inspect}"
+puts "#{processing_doc}\t#{min_trigrams.inspect}"
 

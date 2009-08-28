@@ -48,59 +48,77 @@ task :cat do
 end
 
 def total_num_terms
-	run "hadoop fs -get total_num_terms total_num_terms"
+	run "hadoop fs -get total_num_terms total_num_terms" # clumsy hack to ensure copy is always local
 	cmd = "zcat total_num_terms/part* | perl -plne's/.*\t//'"
 	`#{cmd}`.to_i
 end
 
-namespace :term_frequency do
-	desc "run everything sans upload_input"
-	task :calculate_sips => 
-		[	:term_frequencies, :total_num_terms,
-			:trigrams, :exploded_trigrams, 
-			:trigram_frequency, :trigram_frequency_sum, :least_frequent_trigrams ]
+desc "calculate sips from term frequency"
+task :term_frequency_calculate_sips => 
+	[	:term_frequencies, :total_num_terms,
+		:trigrams, :exploded_trigrams, 
+		:trigram_frequency, :trigram_frequency_sum, :least_frequent_trigrams ]
 
-	task :term_frequencies do
-		run hadoop "input", "term_frequencies", 
-			"/home/mat/dev/sip/emit_terms.rb",
-			"aggregate"
-	end
+task :term_frequencies do
+	run hadoop "input", "term_frequencies", 
+		"/home/mat/dev/sip/emit_terms.rb",
+		"aggregate"
+end
 
-	task :total_num_terms do
-		run hadoop "term_frequencies", "total_num_terms", 
-			"/home/mat/dev/sip/count_total_num_terms.rb",
-			"aggregate"
-	end
+task :total_num_terms do
+	run hadoop "term_frequencies", "total_num_terms", 
+		"/home/mat/dev/sip/count_total_num_terms.rb",
+		"aggregate"
+end
 
-	task :trigrams do
-		run hadoop "input", "trigrams", 
-			"/home/mat/dev/sip/emit_unique_ngrams.rb",
-			"aggregate"
-	end
+task :trigrams do
+	run hadoop "input", "trigrams", 
+		"/home/mat/dev/sip/emit_ngrams.rb",
+		"aggregate",
+		"-cmdenv AGGREGATE_TYPE=UniqValueCount -cmdenv NGRAM_SIZE=3"
+end
 
-	task :exploded_trigrams do
-		run hadoop "trigrams", "exploded_trigrams",
-			"/home/mat/dev/sip/explode_trigrams.rb",
-			"/bin/cat"
-	end
+task :exploded_trigrams do
+	run hadoop "trigrams", "exploded_trigrams",
+		"/home/mat/dev/sip/explode_ngrams.rb",
+		"/bin/cat"
+end
 
-	task :trigram_frequency do
-		run hadoop "term_frequencies exploded_trigrams", "trigram_frequency",
-			"/bin/cat",
-			"/home/mat/dev/sip/join_trigram_frequency.rb",
-			"-cmdenv TOTAL_NUM_TERMS=#{total_num_terms}"
-	end
+task :trigram_frequency do
+	run hadoop "term_frequencies exploded_trigrams", "trigram_frequency",
+		"/bin/cat",
+		"/home/mat/dev/sip/join_trigram_frequency.rb",
+		"-cmdenv TOTAL_NUM_TERMS=#{total_num_terms}"
+end
 
-	task :trigram_frequency_sum do
-		run hadoop "trigram_frequency", "trigram_frequency_sum",
-			"/home/mat/dev/sip/double_value_sum.rb",
-			"aggregate"
-	end
+task :trigram_frequency_sum do
+	run hadoop "trigram_frequency", "trigram_frequency_sum",
+		"/home/mat/dev/sip/double_value_sum.rb",
+		"aggregate"
+end
 
-	task :least_frequent_trigrams do
-		run hadoop "trigram_frequency_sum", "least_frequent_trigrams",
-			"/home/mat/dev/sip/least_frequent_trigrams_map.rb",
-			"/home/mat/dev/sip/least_frequent_trigrams_reduce.rb"
-	end
+task :least_frequent_trigrams do
+	run hadoop "trigram_frequency_sum", "least_frequent_trigrams",
+		"/home/mat/dev/sip/least_frequent_trigrams_map.rb",
+		"/home/mat/dev/sip/least_frequent_trigrams_reduce.rb"
+end
+
+task :bigrams do
+	run hadoop "input", "bigrams", 
+		"/home/mat/dev/sip/emit_ngrams.rb",
+		"aggregate",
+		"-cmdenv AGGREGATE_TYPE=LongValueSum -cmdenv NGRAM_SIZE=2"
+end
+
+task :markov_chain_start_edges do
+	run hadoop "bigrams", "markov_chain_start_edges",
+		"/home/mat/dev/sip/emit_first_component_as_key.rb",
+		"/bin/cat"
+end
+
+task :markov_chain do
+	run hadoop "term_frequencies markov_chain_start_edges", "markov_chain",
+		"/bin/cat",
+		"/home/mat/dev/sip/join_markov_chain.rb"
 end
 

@@ -8,7 +8,7 @@ bash> rake insert_filename_at_start_and_remove_blanks input=input.eg # upload 8 
 bash> rake upload_input
 
 experiment take 2: term frequencies
-bash> rake term_frequency:calc_sips 
+bash> rake term_frequency_calc_sips 
 bash> rake cat DIR=least_frequent_trigrams
 
 experiment take 3: markov chains
