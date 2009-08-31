@@ -156,17 +156,6 @@ task :trigram_lme_frequency do
 		)
 end
 
-=begin
-task :trigram_lme_frequency_sum do
-	run hadoop(
-		:input => "trigram_lme_frequency", 
-		:output => "trigram_lme_frequency_sum",
-		:mapper => "/home/mat/dev/sip/double_value_sum.rb",
-		:reducer => "aggregate"
-		)
-end
-=end
-
 desc "calculate sips from markov chain"
 task :markov_chain_calculate_sips => 
 	[ :bigrams, :markov_chain_start_edges, :markov_chain
@@ -211,22 +200,8 @@ task :trigram_markov_frequency do
 		:input => "markov_chain trigrams_exploded_as_bigrams", 
 		:output => "trigram_markov_frequency",
 		:reducer => "/home/mat/dev/sip/join_trigram_markov_frequency.rb"
-#		:partitioner => "org.apache.hadoop.mapred.lib.KeyFieldBasedPartitioner",
-#		:extra_D_flags => '-Dmap.output.key.field.separator=. -D stream.num.map.output.key.fields=2 -D mapred.text.key.partitioner.options=-k1 ',
-#		:env_vars => "-cmdenv TOTAL_NUM_TERMS=#{total_num_terms}"
 		)
 end
-
-=begin
-task :trigram_markov_frequency_sum do
-	run hadoop(
-		:input => "trigram_markov_frequency", 
-		:output => "trigram_markov_frequency_sum",
-		:mapper => "/home/mat/dev/sip/double_value_sum.rb",
-		:reducer => "aggregate"
-		)
-end
-=end
 
 task :trigram_frequency_sum do
 	run hadoop(
@@ -246,23 +221,4 @@ task :least_frequent_trigrams do
 		)
 end
 
-=begin
-task :bigrams_with_docid do
-	run hadoop(
-		:input => "input",
-		:output => "bigrams_with_docid", 
-		:mapper => "/home/mat/dev/sip/emit_ngrams.rb",
-		:reducer => "aggregate",
-		:env_vars => "-cmdenv AGGREGATE_TYPE=LongValueSum -cmdenv NGRAM_SIZE=2 -cmdenv INCLUDE_DOC_ID=true"
-		)
-end
-
-task :exploded_bigrams_with_docid do
-	run hadoop(
-		:input => "bigrams_with_docid", 
-		:output => "exploded_bigrams",
-		:mapper => "/home/mat/dev/sip/explode_ngrams.rb"
-		)
-end
-=end
 
