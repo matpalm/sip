@@ -1,3 +1,4 @@
+require 'zlib'
 
 def run cmd
 	puts Time.now
@@ -5,33 +6,81 @@ def run cmd
 	puts `#{cmd}`
 end
 
-def hadoop input, output, mapper, reducer, extra = ''
+=begin
+getting weird error when using more than one reduce task..
+HADOOP-6130
+http://issues.apache.org/jira/browse/MAPREDUCE-735
+
+when
+-D mapred.reduce.tasks=4 -D mapred.map.tasks=4
+
+in :trigram_frequency have to use 
+-D stream.num.map.output.key.fields=2 -D mapred.text.key.partitioner.options=-k1,2
+
+then get
+2009-08-30 21:59:54,396 WARN org.apache.hadoop.streaming.PipeMapRed: java.lang.ArrayIndexOutOfBoundsException: 4
+	at org.apache.hadoop.mapred.lib.KeyFieldBasedPartitioner.hashCode(KeyFieldBasedPartitioner.java:95)
+	at org.apache.hadoop.mapred.lib.KeyFieldBasedPartitioner.getPartition(KeyFieldBasedPartitioner.java:87)
+	at org.apache.hadoop.mapred.MapTask$MapOutputBuffer.collect(MapTask.java:801)
+	at org.apache.hadoop.streaming.PipeMapRed$MROutputThread.run(PipeMapRed.java:378)
+
+=end
+
+def hadoop args
+	input, output = [:input,:output].collect { |a| raise "no #{o} set" unless args[a]; args[a]}
+	mapper, reducer = [:mapper,:reducer].collect { |a| args[a] || '/bin/cat' }
 	run "hadoop fs -rmr #{output}" # when running against cluster
 	run "rm -r #{output}"          # when running as single node
 	cmd = [ "$HADOOP_HOME/bin/hadoop",
 			"jar $HADOOP_HOME/contrib/streaming/hadoop-0.20.0-streaming.jar",
 			"-D mapred.output.compress=true",
-			"-D mapred.output.compression.codec=org.apache.hadoop.io.compress.GzipCodec",
+			"-D mapred.output.compression.codec=org.apache.hadoop.io.compress.GzipCodec"
+#			"-D mapred.job.name=blah"
+#			"-D mapred.reduce.tasks=4 ",
+#			"-D mapred.map.tasks=4 "
+			]
+	cmd << args[:extra_D_flags] if args[:extra_D_flags]
+	cmd += [
 			"-output \"#{output}\" ",
 			"-mapper #{mapper} ",
 			"-reducer #{reducer}",
 		]
+	cmd << "-partitioner #{args[:partitioner]}" if args[:partitioner]
 	input.split.each { |i| cmd << "-input \"#{i}\" " }
-	cmd.join(' ')	+ extra
+	cmd << args[:env_vars] if args[:env_vars]
+	cmd.join(' ')
 end
 
-desc "insert_filename_at_start_and_remove_blanks input=input. outputs to hadoop_input"
-task :insert_filename_at_start_and_remove_blanks do
-	raise "usage: insert_and_remove input=input_dir" unless ENV['input']
-	input,output = ENV['input'], 'hadoop_input'
-	run "rm -rf #{output}"
-	run "mkdir #{output}"
-	`ls #{input}`.each do |filename|
-		filename.chomp!
+def spawn_prepare input, filename, output
+	return unless filename
+	fork {
+		infile = Zlib::GzipReader.open("#{input}/#{filename}")
+		outfile = Zlib::GzipWriter.new(File.new("#{output}/#{filename}",'w'))
 		prefix = filename.sub '.txt.gz', ''
-#		run "zcat #{input}/#{filename} | perl -ne'next if /^\\s+$/;s/^/#{prefix} /;print $_' | gzip - > #{output}/#{filename}"
-		run "zcat #{input}/#{filename} | perl -ne'chomp;print \"$_ \"' | perl -plne's/^/#{prefix} /' | gzip - > #{output}/#{filename}"
+		outfile.printf "%s ", prefix
+		infile.each do |line|
+			outfile.printf "%s ", line.downcase.gsub(/\'/,'').gsub(/[^a-z0-9]/,' ').gsub(/\s+/,' ').strip
+		end
+		outfile.printf "\n"
+		outfile.close
+		infile.close
+	}
+end
+
+desc "prepare files for upload from dir=input. outputs to hadoop_input"
+task :prepare_files do
+	raise "usage: insert_and_remove input=input_dir" unless ENV['input']
+	input, output = ENV['input'], 'hadoop_input'
+	run "rm -rf #{output} 2>/dev/null"
+	run "mkdir #{output}"
+	CORES = 4
+	files = `ls #{input}`.split "\n"
+	CORES.times { spawn_prepare input, files.shift, output }
+	while not files.empty?
+		Process.wait
+		spawn_prepare input, files.shift, output 
 	end
+	Process.waitall
 end
 
 desc "cleanup and upload to hdfs a new input dir"
@@ -41,10 +90,10 @@ task :upload_input do
 	run "hadoop fs -ls"
 end
 
-desc "cat DIR/*gz from hdfs"
+desc "cat dir/*gz from hdfs"
 task :cat do
-	raise "DIR=?" unless ENV['DIR']
-	run "hadoop fs -cat #{ENV['DIR']}/part* | gunzip "
+	raise "dir=?" unless ENV['dir']
+	run "hadoop fs -cat #{ENV['dir']}/part* | gunzip "
 end
 
 def total_num_terms
@@ -60,65 +109,94 @@ task :term_frequency_calculate_sips =>
 		:trigram_frequency, :trigram_frequency_sum, :least_frequent_trigrams ]
 
 task :term_frequencies do
-	run hadoop "input", "term_frequencies", 
-		"/home/mat/dev/sip/emit_terms.rb",
-		"aggregate"
+	run hadoop(
+		:input => "input", 
+		:output => "term_frequencies", 
+		:mapper => "/home/mat/dev/sip/emit_terms.rb",
+		:reducer => "aggregate"
+#		:extra_D_flags => '-D stream.num.map.output.key.fields=2'
+		)
 end
 
 task :total_num_terms do
-	run hadoop "term_frequencies", "total_num_terms", 
-		"/home/mat/dev/sip/count_total_num_terms.rb",
-		"aggregate"
+	run hadoop( 
+		:input => "term_frequencies", 
+		:output => "total_num_terms", 
+		:mapper => "/home/mat/dev/sip/count_total_num_terms.rb",
+		:reducer => "aggregate"
+		)
 end
 
 task :trigrams do
-	run hadoop "input", "trigrams", 
-		"/home/mat/dev/sip/emit_ngrams.rb",
-		"aggregate",
-		"-cmdenv AGGREGATE_TYPE=UniqValueCount -cmdenv NGRAM_SIZE=3"
+	run hadoop( 
+		:input => "input",
+		:output => "trigrams", 
+		:mapper => "/home/mat/dev/sip/emit_ngrams.rb",
+		:reducer => "aggregate",
+		:env_vars => "-cmdenv AGGREGATE_TYPE=UniqValueCount -cmdenv NGRAM_SIZE=3 -cmdenv INCLUDE_DOC_ID=true"
+		)
 end
 
 task :exploded_trigrams do
-	run hadoop "trigrams", "exploded_trigrams",
-		"/home/mat/dev/sip/explode_ngrams.rb",
-		"/bin/cat"
+	run hadoop(
+		:input => "trigrams", 
+		:output => "exploded_trigrams",
+		:mapper => "/home/mat/dev/sip/explode_ngrams.rb"
+		)
 end
 
 task :trigram_frequency do
-	run hadoop "term_frequencies exploded_trigrams", "trigram_frequency",
-		"/bin/cat",
-		"/home/mat/dev/sip/join_trigram_frequency.rb",
-		"-cmdenv TOTAL_NUM_TERMS=#{total_num_terms}"
+	run hadoop(
+		:input => "term_frequencies exploded_trigrams", 
+		:output => "trigram_frequency",
+		:reducer => "/home/mat/dev/sip/join_trigram_frequency.rb",
+#		:partitioner => "org.apache.hadoop.mapred.lib.KeyFieldBasedPartitioner",
+#		:extra_D_flags => '-Dmap.output.key.field.separator=. -D stream.num.map.output.key.fields=2 -D mapred.text.key.partitioner.options=-k1 ',
+		:env_vars => "-cmdenv TOTAL_NUM_TERMS=#{total_num_terms}"
+		)
 end
 
 task :trigram_frequency_sum do
-	run hadoop "trigram_frequency", "trigram_frequency_sum",
-		"/home/mat/dev/sip/double_value_sum.rb",
-		"aggregate"
+	run hadoop(
+		:input => "trigram_frequency", 
+		:output => "trigram_frequency_sum",
+		:mapper => "/home/mat/dev/sip/double_value_sum.rb",
+		:reducer => "aggregate"
+		)
 end
 
 task :least_frequent_trigrams do
-	run hadoop "trigram_frequency_sum", "least_frequent_trigrams",
-		"/home/mat/dev/sip/least_frequent_trigrams_map.rb",
-		"/home/mat/dev/sip/least_frequent_trigrams_reduce.rb"
+	run hadoop( 
+		:input => "trigram_frequency_sum",
+		:output => "least_frequent_trigrams",
+		:mapper => "/home/mat/dev/sip/least_frequent_trigrams_map.rb",
+		:reducer => "/home/mat/dev/sip/least_frequent_trigrams_reduce.rb"
+		)
 end
 
 task :bigrams do
-	run hadoop "input", "bigrams", 
-		"/home/mat/dev/sip/emit_ngrams.rb",
-		"aggregate",
-		"-cmdenv AGGREGATE_TYPE=LongValueSum -cmdenv NGRAM_SIZE=2"
+	run hadoop(
+		:input => "input",
+		:output => "bigrams", 
+		:mapper => "/home/mat/dev/sip/emit_ngrams.rb",
+		:reducer => "aggregate",
+		:env_vars => "-cmdenv AGGREGATE_TYPE=LongValueSum -cmdenv NGRAM_SIZE=2 -cmdenv INCLUDE_DOC_ID=false"
+		)
 end
 
 task :markov_chain_start_edges do
-	run hadoop "bigrams", "markov_chain_start_edges",
-		"/home/mat/dev/sip/emit_first_component_as_key.rb",
-		"/bin/cat"
+	run hadoop(
+		:input => "bigrams",
+		:output =>"markov_chain_start_edges",
+		:mapper =>"/home/mat/dev/sip/emit_first_component_as_key.rb"
+		)
 end
 
 task :markov_chain do
-	run hadoop "term_frequencies markov_chain_start_edges", "markov_chain",
-		"/bin/cat",
-		"/home/mat/dev/sip/join_markov_chain.rb"
+	run hadoop(
+		:input => "term_frequencies markov_chain_start_edges",
+		:output => "markov_chain",
+		:reducer => "/home/mat/dev/sip/join_markov_chain.rb"
+		)
 end
 

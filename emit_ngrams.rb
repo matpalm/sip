@@ -1,14 +1,17 @@
 #!/usr/bin/env ruby
 
-['AGGREGATE_TYPE', 'NGRAM_SIZE'].each do |p|
+['AGGREGATE_TYPE', 'NGRAM_SIZE', 'INCLUDE_DOC_ID'].each do |p|
 	raise "#{p} env var not set" unless ENV[p]
 end
 
 AGGREGATE_TYPE = ENV['AGGREGATE_TYPE']
 NGRAM_SIZE = ENV['NGRAM_SIZE'].to_i
+INCLUDE_DOC_ID = ENV['INCLUDE_DOC_ID']=='true'
 
 def emit docid, tuple
-		puts "#{AGGREGATE_TYPE}:#{docid} #{tuple.join(' ')}\t1"	
+		printf "#{AGGREGATE_TYPE}:"
+		printf "#{docid} " if INCLUDE_DOC_ID
+		printf "#{tuple.join(' ')}\t1\n"	
 end
 
 STDIN.each do |line|
@@ -16,7 +19,7 @@ STDIN.each do |line|
 		line =~ /(.*?) (.*)/	
 		file, data = $1, $2
 
-		terms = data.downcase.gsub(/\'/,'').gsub(/[^a-z0-9]/,' ').strip.split
+		terms = data.split
 		next if terms.size < NGRAM_SIZE
 	
 		tuple = []

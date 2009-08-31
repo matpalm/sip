@@ -4,5 +4,5 @@ STDIN.each do |record|
 	data,count = $1,$2
 	components = data.split
 	components.shift # doc id
-	components.each { |c| puts "#{c} 1f\t#{data} #{count}" }
+	components.each { |c| puts "#{c}.1f\t#{data} #{count}" }
 end

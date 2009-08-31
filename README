@@ -4,12 +4,12 @@ data from project gutenberg, runs using hadoop streaming with ruby map/reduce fu
 see project page at http://matpalm.com/sip
 
 bash> start-hadoop-here
-bash> rake insert_filename_at_start_and_remove_blanks input=input.eg # upload 8 file example
+bash> rake prepare_files input=input.eg # upload 8 file example
 bash> rake upload_input
 
 experiment take 2: term frequencies
-bash> rake term_frequency_calc_sips 
-bash> rake cat DIR=least_frequent_trigrams
+bash> rake term_frequency_calculate_sips 
+bash> rake cat dir=least_frequent_trigrams
 
 experiment take 3: markov chains
 *work in progress*
