@@ -3,9 +3,7 @@ raise "need ENV['TOTAL_NUM_TERMS'] set" unless ENV['TOTAL_NUM_TERMS']
 log_frequency = nil
 TOTAL_NUM_TERMS = ENV['TOTAL_NUM_TERMS'].to_f
 
-f = File.new("/tmp/log_#{$$}","w")
 STDIN.each do |record|
-	f.puts record
 	record =~ /(.*)\t(.*)/
 	key, value = $1, $2
 	if key =~ /0p$/
@@ -17,4 +15,3 @@ STDIN.each do |record|
 		puts "#{value}\t#{log_frequency}"
 	end
 end
-f.close
