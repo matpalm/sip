@@ -145,10 +145,10 @@ task :exploded_trigrams do
 		)
 end
 
-task :trigram_lme_frequency do
+task :trigram_mle_frequency do
 	run hadoop(
 		:input => "term_frequencies exploded_trigrams", 
-		:output => "trigram_lme_frequency",
+		:output => "trigram_mle_frequency",
 		:reducer => "/home/mat/dev/sip/join_trigram_frequency.rb",
 #		:partitioner => "org.apache.hadoop.mapred.lib.KeyFieldBasedPartitioner",
 #		:extra_D_flags => '-Dmap.output.key.field.separator=. -D stream.num.map.output.key.fields=2 -D mapred.text.key.partitioner.options=-k1 ',
@@ -205,7 +205,7 @@ end
 
 task :trigram_frequency_sum do
 	run hadoop(
-		:input => "trigram_lme_frequency trigram_markov_frequency", 
+		:input => "trigram_mle_frequency trigram_markov_frequency", 
 		:output => "trigram_frequency_sum",
 		:mapper => "/home/mat/dev/sip/double_value_sum.rb",
 		:reducer => "aggregate"
