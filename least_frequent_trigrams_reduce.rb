@@ -1,35 +1,19 @@
 #!/usr/bin/env ruby
-
-NUM_TO_KEEP = 10
+require "#{File.dirname(__FILE__)}/top_n.rb"
 
 processing_doc = nil
-min_freq = max_freq = 0
-min_trigrams = [] # [[-4,'abc'],[-3,'wer']]
-
+top_n = nil
 STDIN.each do |record|
 	record =~ /(.*)\t(.*?) (.*)/
 	doc,freq,trigram = $1, $2.to_f, $3
-	if doc != processing_doc
-		if processing_doc != nil
-			puts "#{processing_doc}\t#{min_trigrams.inspect}"
-		end
+	if doc != processing_doc		
+		puts "#{processing_doc}\t#{top_n.top.inspect}" if processing_doc != nil
 		processing_doc = doc
-		min_freq = max_freq = freq
-		min_trigrams = [[freq,trigram]]
+		top_n = TopN.new 10
 	else
-		if min_trigrams.size < NUM_TO_KEEP
-			min_trigrams << [freq,trigram]
-			min_trigrams = min_trigrams.sort{|a,b| a[0]<=>b[0]}
-			max_freq = min_trigrams.last[0]
-		elsif freq < max_freq
-			min_trigrams.last[0] = freq
-			min_trigrams.last[1] = trigram
-			min_trigrams = min_trigrams.sort{|a,b| a[0]<=>b[0]}
-			max_freq = min_trigrams.last[0]
-			min_freq = min_trigrams.first[0]
-		end
+		top_n.add trigram, freq
 	end
 end			
 
-puts "#{processing_doc}\t#{min_trigrams.inspect}"
+puts "#{processing_doc}\t#{top_n.top.inspect}"
 

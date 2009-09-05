@@ -4,7 +4,10 @@ def run cmd
 	puts Time.now
 	puts cmd
 	puts `#{cmd}`
+	raise "error running last command!!!" if ! cmd =~ /^-rmr/ and $?!=0
 end
+
+B = "/home/mat/dev/sip"
 
 =begin
 getting weird error when using more than one reduce task..
@@ -42,8 +45,8 @@ def hadoop args
 	cmd << args[:extra_D_flags] if args[:extra_D_flags]
 	cmd += [
 			"-output \"#{output}\" ",
-			"-mapper #{mapper} ",
-			"-reducer #{reducer}",
+			"-mapper \"#{mapper}\" ",
+			"-reducer \"#{reducer}\"",
 		]
 	cmd << "-partitioner #{args[:partitioner]}" if args[:partitioner]
 	input.split.each { |i| cmd << "-input \"#{i}\" " }
@@ -102,17 +105,20 @@ def total_num_terms
 	`#{cmd}`.to_i
 end
 
-desc "calculate sips from term frequency"
-task :term_frequency_calculate_sips => 
-	[	:term_frequencies, :total_num_terms,
-		:trigrams, :exploded_trigrams, 
-		:trigram_frequency, :trigram_frequency_sum, :least_frequent_trigrams ]
+desc "calculate sips"
+task :calculate_sips => [	# arbitrary topological sorted order
+		:term_frequencies, :trigrams, :bigrams, 
+		:total_num_terms, :exploded_trigrams, :bigram_keyed_by_first_elem, :bigram_first_elem_frequency,
+		:trigram_mle_frequency, :trigrams_exploded_as_bigrams, :markov_chain,
+		:trigram_markov_frequency, :trigram_frequency_sum,
+		:least_frequent_trigrams
+	]
 
 task :term_frequencies do
 	run hadoop(
 		:input => "input", 
 		:output => "term_frequencies", 
-		:mapper => "/home/mat/dev/sip/emit_terms.rb",
+		:mapper => "#{B}/emit_terms.rb",
 		:reducer => "aggregate"
 #		:extra_D_flags => '-D stream.num.map.output.key.fields=2'
 		)
@@ -122,7 +128,7 @@ task :total_num_terms do
 	run hadoop( 
 		:input => "term_frequencies", 
 		:output => "total_num_terms", 
-		:mapper => "/home/mat/dev/sip/count_total_num_terms.rb",
+		:mapper => "#{B}/count_total_num_terms.rb",
 		:reducer => "aggregate"
 		)
 end
@@ -131,7 +137,7 @@ task :trigrams do
 	run hadoop( 
 		:input => "input",
 		:output => "trigrams", 
-		:mapper => "/home/mat/dev/sip/emit_ngrams.rb",
+		:mapper => "#{B}/emit_ngrams.rb",
 		:reducer => "aggregate",
 		:env_vars => "-cmdenv AGGREGATE_TYPE=UniqValueCount -cmdenv NGRAM_SIZE=3 -cmdenv INCLUDE_DOC_ID=true"
 		)
@@ -141,7 +147,7 @@ task :exploded_trigrams do
 	run hadoop(
 		:input => "trigrams", 
 		:output => "exploded_trigrams",
-		:mapper => "/home/mat/dev/sip/explode_ngrams.rb"
+		:mapper => "#{B}/explode_ngrams.rb"
 		)
 end
 
@@ -149,41 +155,45 @@ task :trigram_mle_frequency do
 	run hadoop(
 		:input => "term_frequencies exploded_trigrams", 
 		:output => "trigram_mle_frequency",
-		:reducer => "/home/mat/dev/sip/join_trigram_frequency.rb",
+		:reducer => "#{B}/join_trigram_frequency.rb",
 #		:partitioner => "org.apache.hadoop.mapred.lib.KeyFieldBasedPartitioner",
 #		:extra_D_flags => '-Dmap.output.key.field.separator=. -D stream.num.map.output.key.fields=2 -D mapred.text.key.partitioner.options=-k1 ',
-		:env_vars => "-cmdenv TOTAL_NUM_TERMS=#{total_num_terms}"
+		:env_vars => "-cmdenv TOTAL_NUM_TERMS=#{total_num_terms}" 
 		)
 end
-
-desc "calculate sips from markov chain"
-task :markov_chain_calculate_sips => 
-	[ :bigrams, :markov_chain_start_edges, :markov_chain
-	]
 
 task :bigrams do
 	run hadoop(
 		:input => "input",
 		:output => "bigrams", 
-		:mapper => "/home/mat/dev/sip/emit_ngrams.rb",
+		:mapper => "#{B}/emit_ngrams.rb",
 		:reducer => "aggregate",
 		:env_vars => "-cmdenv AGGREGATE_TYPE=LongValueSum -cmdenv NGRAM_SIZE=2 -cmdenv INCLUDE_DOC_ID=false"
 		)
 end
 
-task :markov_chain_start_edges do
+task :bigram_keyed_by_first_elem do
 	run hadoop(
 		:input => "bigrams",
-		:output =>"markov_chain_start_edges",
-		:mapper =>"/home/mat/dev/sip/emit_first_component_as_key.rb"
+		:output =>"bigram_keyed_by_first_elem",
+		:mapper =>"#{B}/emit_first_component_as_key.rb"
+		)
+end
+
+task :bigram_first_elem_frequency do
+	run hadoop(
+		:input => "bigrams",
+		:output => "bigram_first_elem_frequency",
+		:mapper => "#{B}/first_component_freq.rb",
+		:reducer => "aggregate"
 		)
 end
 
 task :markov_chain do
 	run hadoop(
-		:input => "term_frequencies markov_chain_start_edges",
+		:input => "bigram_first_elem_frequency bigram_keyed_by_first_elem",
 		:output => "markov_chain",
-		:reducer => "/home/mat/dev/sip/join_markov_chain.rb"
+		:reducer => "#{B}/join_markov_chain.rb"
 		)
 end
 
@@ -191,7 +201,7 @@ task :trigrams_exploded_as_bigrams do
 	run hadoop(
 		:input => "trigrams",
 		:output => "trigrams_exploded_as_bigrams", 
-		:mapper => "/home/mat/dev/sip/explode_trigrams_as_bigrams.rb"
+		:mapper => "#{B}/explode_trigrams_as_bigrams.rb"
 		)
 end
 
@@ -199,7 +209,7 @@ task :trigram_markov_frequency do
 	run hadoop(
 		:input => "markov_chain trigrams_exploded_as_bigrams", 
 		:output => "trigram_markov_frequency",
-		:reducer => "/home/mat/dev/sip/join_trigram_markov_frequency.rb"
+		:reducer => "#{B}/join_trigram_markov_frequency.rb"
 		)
 end
 
@@ -207,7 +217,7 @@ task :trigram_frequency_sum do
 	run hadoop(
 		:input => "trigram_mle_frequency trigram_markov_frequency", 
 		:output => "trigram_frequency_sum",
-		:mapper => "/home/mat/dev/sip/double_value_sum.rb",
+		:mapper => "#{B}/double_value_sum.rb",
 		:reducer => "aggregate"
 		)
 end
@@ -216,8 +226,8 @@ task :least_frequent_trigrams do
 	run hadoop( 
 		:input => "trigram_frequency_sum",
 		:output => "least_frequent_trigrams",
-		:mapper => "/home/mat/dev/sip/least_frequent_trigrams_map.rb",
-		:reducer => "/home/mat/dev/sip/least_frequent_trigrams_reduce.rb"
+		:mapper => "#{B}/least_frequent_trigrams_map.rb",
+		:reducer => "#{B}/least_frequent_trigrams_reduce.rb"
 		)
 end
 

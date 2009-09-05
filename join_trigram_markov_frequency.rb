@@ -10,7 +10,7 @@ STDIN.each do |record|
 	key, value = $1, $2
 	if key =~ /0p$/
 		# log_frequency
-		log_frequency = Math.log value.to_f 		
+		log_frequency = ( Math.log value.to_f ) / 2 # /2 since going for mean
 	else
 		puts "#{value}\t#{log_frequency}"
 	end
