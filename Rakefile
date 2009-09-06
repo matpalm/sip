@@ -12,24 +12,31 @@ B = File.dirname(__FILE__)
 def hadoop args
 	input, output = [:input,:output].collect { |a| raise "no #{o} set" unless args[a]; args[a]}
 	mapper, reducer = [:mapper,:reducer].collect { |a| args[a] || '/bin/cat' }
-	run "hadoop fs -rmr #{output} 2>/dev/null" # when running against cluster
-	run "rm -r #{output} 2>/dev/null"          # when running as single node
+	run "hadoop fs -rmr \"sip/#{output}\" 2>/dev/null" # when running against cluster
+	run "rm -r \"sip/#{output}\" 2>/dev/null"          # when running as single node
 	cmd = [ "$HADOOP_HOME/bin/hadoop",
 			"jar $HADOOP_HOME/contrib/streaming/hadoop-0.20.0-streaming.jar",
 			"-D mapred.output.compress=true",
-			"-D mapred.output.compression.codec=org.apache.hadoop.io.compress.GzipCodec",
-#			"-D mapred.reduce.tasks=4 -D mapred.map.tasks=4"
-#			"-D mapred.job.name=blah"
-#			"-D mapred.reduce.tasks=4 ",
+			"-D mapred.output.compression.codec=org.apache.hadoop.io.compress.GzipCodec"
 			]
+
 	cmd << args[:extra_D_flags] if args[:extra_D_flags]
+	cmd << "-D stream.num.map.output.key.fields=2 -D map.output.key.field.separator=. -D mapred.text.key.partitioner.options=-k1,1" if args[:join]
+
+	input.split.each { |i| cmd << "-input \"sip/#{i}\" " }
 	cmd += [
-			"-output \"#{output}\" ",
+			"-output \"sip/#{output}\" ",
 			"-mapper \"#{mapper}\" ",
 			"-reducer \"#{reducer}\"",
 		]
-	cmd << "-partitioner #{args[:partitioner]}" if args[:partitioner]
-	input.split.each { |i| cmd << "-input \"#{i}\" " }
+
+	cmd << "-partitioner org.apache.hadoop.mapred.lib.KeyFieldBasedPartitioner" if args[:join]
+
+	cmd << "-file \"#{mapper}\"" if mapper =~ /rb$/
+	cmd << "-file \"#{reducer}\"" if reducer =~ /rb$/
+	
+	args[:extra_files].each { |f| cmd << "-file \"#{B}/#{f}\"" }	
+
 	cmd << args[:env_vars] if args[:env_vars]
 	cmd.join(' ')
 end
@@ -68,9 +75,10 @@ end
 
 desc "cleanup and upload to hdfs a new input dir"
 task :upload_input do
-	run "hadoop fs -rmr input"
-	run "hadoop fs -put hadoop_input input"
-	run "hadoop fs -ls"
+	run "hadoop fs -rmr sip"
+	run "hadoop fs -mkdir sip"
+	run "hadoop fs -put hadoop_input sip/input"
+	run "hadoop fs -ls sip"
 end
 
 desc "cat dir/*gz from hdfs"
@@ -80,7 +88,7 @@ task :cat do
 end
 
 def total_num_terms
-	run "hadoop fs -get total_num_terms total_num_terms" # clumsy hack to ensure copy is always local
+	run "hadoop fs -get sip/total_num_terms total_num_terms" # clumsy hack to ensure copy is always local
 	cmd = "zcat total_num_terms/part* | perl -plne's/.*\t//'"
 	`#{cmd}`.to_i
 end
@@ -136,8 +144,7 @@ task :trigram_mle_frequency do
 		:input => "term_frequencies exploded_trigrams", 
 		:output => "trigram_mle_frequency",
 		:reducer => "#{B}/join_trigram_frequency.rb",
-		:partitioner => "org.apache.hadoop.mapred.lib.KeyFieldBasedPartitioner",
-		:extra_D_flags => "-D stream.num.map.output.key.fields=2 -D map.output.key.field.separator=. -D mapred.text.key.partitioner.options=-k1,1",
+		:join => true,
 		:env_vars => "-cmdenv TOTAL_NUM_TERMS=#{total_num_terms}" 
 		)
 end
@@ -174,8 +181,7 @@ task :markov_chain do
 		:input => "bigram_first_elem_frequency bigram_keyed_by_first_elem",
 		:output => "markov_chain",
 		:reducer => "#{B}/join_markov_chain.rb",
-		:partitioner => "org.apache.hadoop.mapred.lib.KeyFieldBasedPartitioner",
-		:extra_D_flags => "-D stream.num.map.output.key.fields=2 -D map.output.key.field.separator=. -D mapred.text.key.partitioner.options=-k1,1"
+		:join => true
 		)
 end
 
@@ -192,8 +198,7 @@ task :trigram_markov_frequency do
 		:input => "markov_chain trigrams_exploded_as_bigrams", 
 		:output => "trigram_markov_frequency",
 		:reducer => "#{B}/join_trigram_markov_frequency.rb",
-		:partitioner => "org.apache.hadoop.mapred.lib.KeyFieldBasedPartitioner",
-		:extra_D_flags => "-D stream.num.map.output.key.fields=2 -D map.output.key.field.separator=. -D mapred.text.key.partitioner.options=-k1,1"
+		:join => true
 		)
 end
 
@@ -211,7 +216,8 @@ task :least_frequent_trigrams do
 		:input => "trigram_frequency_sum",
 		:output => "least_frequent_trigrams",
 		:mapper => "#{B}/least_frequent_trigrams_map.rb",
-		:reducer => "#{B}/least_frequent_trigrams_reduce.rb"
+		:reducer => "#{B}/least_frequent_trigrams_reduce.rb",
+		:extra_files => ["top_n.rb"]
 		)
 end
 
