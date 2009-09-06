@@ -7,40 +7,20 @@ def run cmd
 	raise "error running last command!!!" if ! cmd =~ /^-rmr/ and $?!=0
 end
 
-B = "/home/mat/dev/sip"
-
-=begin
-getting weird error when using more than one reduce task..
-HADOOP-6130
-http://issues.apache.org/jira/browse/MAPREDUCE-735
-
-when
--D mapred.reduce.tasks=4 -D mapred.map.tasks=4
-
-in :trigram_frequency have to use 
--D stream.num.map.output.key.fields=2 -D mapred.text.key.partitioner.options=-k1,2
-
-then get
-2009-08-30 21:59:54,396 WARN org.apache.hadoop.streaming.PipeMapRed: java.lang.ArrayIndexOutOfBoundsException: 4
-	at org.apache.hadoop.mapred.lib.KeyFieldBasedPartitioner.hashCode(KeyFieldBasedPartitioner.java:95)
-	at org.apache.hadoop.mapred.lib.KeyFieldBasedPartitioner.getPartition(KeyFieldBasedPartitioner.java:87)
-	at org.apache.hadoop.mapred.MapTask$MapOutputBuffer.collect(MapTask.java:801)
-	at org.apache.hadoop.streaming.PipeMapRed$MROutputThread.run(PipeMapRed.java:378)
-
-=end
+B = File.dirname(__FILE__)
 
 def hadoop args
 	input, output = [:input,:output].collect { |a| raise "no #{o} set" unless args[a]; args[a]}
 	mapper, reducer = [:mapper,:reducer].collect { |a| args[a] || '/bin/cat' }
-	run "hadoop fs -rmr #{output}" # when running against cluster
-	run "rm -r #{output}"          # when running as single node
+	run "hadoop fs -rmr #{output} 2>/dev/null" # when running against cluster
+	run "rm -r #{output} 2>/dev/null"          # when running as single node
 	cmd = [ "$HADOOP_HOME/bin/hadoop",
 			"jar $HADOOP_HOME/contrib/streaming/hadoop-0.20.0-streaming.jar",
 			"-D mapred.output.compress=true",
-			"-D mapred.output.compression.codec=org.apache.hadoop.io.compress.GzipCodec"
+			"-D mapred.output.compression.codec=org.apache.hadoop.io.compress.GzipCodec",
+#			"-D mapred.reduce.tasks=4 -D mapred.map.tasks=4"
 #			"-D mapred.job.name=blah"
 #			"-D mapred.reduce.tasks=4 ",
-#			"-D mapred.map.tasks=4 "
 			]
 	cmd << args[:extra_D_flags] if args[:extra_D_flags]
 	cmd += [
@@ -156,8 +136,8 @@ task :trigram_mle_frequency do
 		:input => "term_frequencies exploded_trigrams", 
 		:output => "trigram_mle_frequency",
 		:reducer => "#{B}/join_trigram_frequency.rb",
-#		:partitioner => "org.apache.hadoop.mapred.lib.KeyFieldBasedPartitioner",
-#		:extra_D_flags => '-Dmap.output.key.field.separator=. -D stream.num.map.output.key.fields=2 -D mapred.text.key.partitioner.options=-k1 ',
+		:partitioner => "org.apache.hadoop.mapred.lib.KeyFieldBasedPartitioner",
+		:extra_D_flags => "-D stream.num.map.output.key.fields=2 -D map.output.key.field.separator=. -D mapred.text.key.partitioner.options=-k1,1",
 		:env_vars => "-cmdenv TOTAL_NUM_TERMS=#{total_num_terms}" 
 		)
 end
@@ -193,7 +173,9 @@ task :markov_chain do
 	run hadoop(
 		:input => "bigram_first_elem_frequency bigram_keyed_by_first_elem",
 		:output => "markov_chain",
-		:reducer => "#{B}/join_markov_chain.rb"
+		:reducer => "#{B}/join_markov_chain.rb",
+		:partitioner => "org.apache.hadoop.mapred.lib.KeyFieldBasedPartitioner",
+		:extra_D_flags => "-D stream.num.map.output.key.fields=2 -D map.output.key.field.separator=. -D mapred.text.key.partitioner.options=-k1,1"
 		)
 end
 
@@ -209,7 +191,9 @@ task :trigram_markov_frequency do
 	run hadoop(
 		:input => "markov_chain trigrams_exploded_as_bigrams", 
 		:output => "trigram_markov_frequency",
-		:reducer => "#{B}/join_trigram_markov_frequency.rb"
+		:reducer => "#{B}/join_trigram_markov_frequency.rb",
+		:partitioner => "org.apache.hadoop.mapred.lib.KeyFieldBasedPartitioner",
+		:extra_D_flags => "-D stream.num.map.output.key.fields=2 -D map.output.key.field.separator=. -D mapred.text.key.partitioner.options=-k1,1"
 		)
 end
 

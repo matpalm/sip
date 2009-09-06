@@ -5,7 +5,10 @@
 # 0 pa.1f  7hmvg10 0 pa rhubarb
 
 log_frequency = nil
+#debug = File.new("/tmp/debug.#{$$}.out","w")
 STDIN.each do |record|
+#	debug.puts record
+	record = record.chomp.strip # avoid \t put on end by, i think, partitioner (?)
 	record =~ /(.*)\t(.*)/
 	key, value = $1, $2
 	if key =~ /0p$/
@@ -15,3 +18,4 @@ STDIN.each do |record|
 		puts "#{value}\t#{log_frequency}"
 	end
 end
+#debug.close

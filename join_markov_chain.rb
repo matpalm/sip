@@ -1,6 +1,7 @@
 #!/usr/bin/env ruby
 frequency = nil
 STDIN.each do |record|
+	record = record.chomp.strip # avoid \t put on end by, i think, partitioner (?)
 	record =~ /(.*?)\.(.*)\t(.*)/
 	key_term, key_type, value = $1, $2, $3
 	if key_type =~ /0p$/

@@ -14,6 +14,5 @@ STDIN.each do |record|
 		top_n.add trigram, freq
 	end
 end			
-
-puts "#{processing_doc}\t#{top_n.top.inspect}"
+puts "#{processing_doc}\t#{top_n.top.inspect}" if top_n # possibility exists that a partition will be empty
 

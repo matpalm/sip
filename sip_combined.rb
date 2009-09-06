@@ -89,6 +89,14 @@ class TermFreq
 		trigram.collect {|t| @term_freq[t]}
 	end
 
+	def total_num_terms
+		@total_terms	
+	end
+
+	def unique_terms
+		@term_freq.keys.size
+	end
+
 end
 
 class MarkovChain
@@ -137,7 +145,6 @@ STDIN.each do |record|
 	terms = record.split
 	doc_id = terms.shift
 	documents[doc_id.to_sym] = term_to_idx.terms_to_ids terms
-	#puts "#{doc_id} => #{documents[doc_id.to_sym].inspect}"
 end
 
 # build term frequency table and markov chain
@@ -158,6 +165,9 @@ def prob_of sip_mle, sip_markov
 #	sip_mle.sum + sip_markov.sum # sumtastic
 end
 
+puts "total_num_terms #{term_freq.total_num_terms}"
+puts "unique_terms #{term_freq.unique_terms}"
+
 # iterate over each document's trigrams remembering the least likely
 documents.each do |doc_id, terms|	
 	top_sips = TopN.new 10
@@ -172,15 +182,3 @@ documents.each do |doc_id, terms|
 	end
 	puts "doc #{doc_id} #{top_sips.top.inspect}"
 end
-
-=begin
-ids = term_to_idx.terms_to_ids("mixed with water".split)
-
-sip_mle = term_freq.maximum_likelihood_estimate ids
-sip_markov = markov_chain.prob ids
-
-mean = (sip_mle.sum + sip_markov.sum) / (sip_mle.length + sip_markov.length)
-mean_of_means = (sip_mle.mean + sip_markov.mean)/2
-
-puts "sip_mle=#{sip_mle.inspect} sip_markov=#{sip_markov.inspect} mean=#{mean} mean_of_means=#{mean_of_means}"
-=end	
