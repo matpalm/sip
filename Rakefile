@@ -35,7 +35,7 @@ def hadoop args
 	cmd << "-file \"#{mapper}\"" if mapper =~ /rb$/
 	cmd << "-file \"#{reducer}\"" if reducer =~ /rb$/
 	
-	args[:extra_files].each { |f| cmd << "-file \"#{B}/#{f}\"" }	
+	args[:extra_files].each { |f| cmd << "-file \"#{B}/#{f}\"" }	if args[:extra_files]
 
 	cmd << args[:env_vars] if args[:env_vars]
 	cmd.join(' ')
