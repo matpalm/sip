@@ -121,10 +121,10 @@ end
 desc "calculate sips"
 task :calculate_sips => [	# arbitrary topological sorted order
 		:term_freq, :trigrams, :bigrams, 
-		:total_num_terms, :exploded_trigrams, :bigram_keyed_by_first_elem, :bigram_first_elem_frequency,
+		:total_num_terms, :exploded_trigrams, :bigram_keyed_by_first_elem, :bigram_first_elem_freq,
 		:trigram_mle_freq, :trigrams_exploded_as_bigrams, :markov_chain,
-		:trigram_markov_frequency, :trigram_frequency_sum,
-		:least_frequent_trigrams
+		:trigram_markov_freq, :trigram_freq_sum,
+		:least_freq_trigrams
 	]
 
 task :term_freq do
