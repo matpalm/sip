@@ -9,19 +9,38 @@ end
 
 B = File.dirname(__FILE__)
 
+def hadoop_version
+	@@version ||= determine_hadoop_version
+end
+def determine_hadoop_version
+	cmd = 'hadoop version | grep ^Hadoop | sed -es/Hadoop\ //'
+	`#{cmd}`.chomp
+end
+
+def version_specific_property_seperator
+	return hadoop_version=='0.18.3' ? '-jobconf' : '-D'
+end
+
 def hadoop args
 	input, output = [:input,:output].collect { |a| raise "no #{o} set" unless args[a]; args[a]}
 	mapper, reducer = [:mapper,:reducer].collect { |a| args[a] || '/bin/cat' }
+
 	run "hadoop fs -rmr \"sip/#{output}\" 2>/dev/null" # when running against cluster
 	run "rm -r \"sip/#{output}\" 2>/dev/null"          # when running as single node
-	cmd = [ "$HADOOP_HOME/bin/hadoop",
-			"jar $HADOOP_HOME/contrib/streaming/hadoop-0.20.0-streaming.jar",
-			"-D mapred.output.compress=true",
-			"-D mapred.output.compression.codec=org.apache.hadoop.io.compress.GzipCodec"
-			]
 
-	cmd << args[:extra_D_flags] if args[:extra_D_flags]
-	cmd << "-D stream.num.map.output.key.fields=2 -D map.output.key.field.separator=. -D mapred.text.key.partitioner.options=-k1,1" if args[:join]
+	cmd = [ "hadoop","jar $HADOOP_HOME/contrib/streaming/hadoop-*-streaming.jar"]
+
+	# props need to be here for at least v0.19
+	# for v0.18 they need to be at end
+	props = []
+	if args[:join]
+			props += ["stream.map.output.field.seperator=.", "stream.num.map.output.key.fields=2", "map.output.key.field.separator=."]
+			props << "num.key.fields.for.partition=1" # hadoop 0.18.3
+			props << "mapred.text.key.partitioner.options=-k1,1" # hadoop 0.19+
+	end
+	props += ["mapred.output.compress=true", "mapred.output.compression.codec=org.apache.hadoop.io.compress.GzipCodec"]
+	props += ["mapred.reduce.tasks=10", "mapred.map.tasks=10"] # don't forget, ignore when running in local mode
+	props.each { |prop| cmd << "#{version_specific_property_seperator} #{prop}" }
 
 	input.split.each { |i| cmd << "-input \"sip/#{i}\" " }
 	cmd += [
@@ -36,6 +55,8 @@ def hadoop args
 	cmd << "-file \"#{reducer}\"" if reducer =~ /rb$/
 	
 	args[:extra_files].each { |f| cmd << "-file \"#{B}/#{f}\"" }	if args[:extra_files]
+
+#	cmd << "-verbose"
 
 	cmd << args[:env_vars] if args[:env_vars]
 	cmd.join(' ')
@@ -78,7 +99,7 @@ task :upload_input do
 	run "hadoop fs -rmr sip"
 	run "hadoop fs -mkdir sip"
 	run "hadoop fs -put hadoop_input sip/input"
-	run "hadoop fs -ls sip"
+	run "hadoop fs -ls sip/input"
 end
 
 desc "cat dir/*gz from hdfs"
@@ -88,33 +109,36 @@ task :cat do
 end
 
 def total_num_terms
+	run "rm -rf total_num_terms "
 	run "hadoop fs -get sip/total_num_terms total_num_terms" # clumsy hack to ensure copy is always local
-	cmd = "zcat total_num_terms/part* | perl -plne's/.*\t//'"
-	`#{cmd}`.to_i
+	run "gunzip total_num_terms/*gz" # support either gz or not
+	cmd = "cat total_num_terms/part* | perl -plne's/.*\t//'"
+	result = `#{cmd}`
+	raise "couldn't determine total_num_terms?" if result.empty?
+	result.to_i
 end
 
 desc "calculate sips"
 task :calculate_sips => [	# arbitrary topological sorted order
-		:term_frequencies, :trigrams, :bigrams, 
+		:term_freq, :trigrams, :bigrams, 
 		:total_num_terms, :exploded_trigrams, :bigram_keyed_by_first_elem, :bigram_first_elem_frequency,
-		:trigram_mle_frequency, :trigrams_exploded_as_bigrams, :markov_chain,
+		:trigram_mle_freq, :trigrams_exploded_as_bigrams, :markov_chain,
 		:trigram_markov_frequency, :trigram_frequency_sum,
 		:least_frequent_trigrams
 	]
 
-task :term_frequencies do
+task :term_freq do
 	run hadoop(
 		:input => "input", 
-		:output => "term_frequencies", 
+		:output => "term_freq", 
 		:mapper => "#{B}/emit_terms.rb",
 		:reducer => "aggregate"
-#		:extra_D_flags => '-D stream.num.map.output.key.fields=2'
 		)
 end
 
 task :total_num_terms do
 	run hadoop( 
-		:input => "term_frequencies", 
+		:input => "term_freq", 
 		:output => "total_num_terms", 
 		:mapper => "#{B}/count_total_num_terms.rb",
 		:reducer => "aggregate"
@@ -139,10 +163,10 @@ task :exploded_trigrams do
 		)
 end
 
-task :trigram_mle_frequency do
+task :trigram_mle_freq do
 	run hadoop(
-		:input => "term_frequencies exploded_trigrams", 
-		:output => "trigram_mle_frequency",
+		:input => "term_freq exploded_trigrams", 
+		:output => "trigram_mle_freq",
 		:reducer => "#{B}/join_trigram_frequency.rb",
 		:join => true,
 		:env_vars => "-cmdenv TOTAL_NUM_TERMS=#{total_num_terms}" 
@@ -167,10 +191,10 @@ task :bigram_keyed_by_first_elem do
 		)
 end
 
-task :bigram_first_elem_frequency do
+task :bigram_first_elem_freq do
 	run hadoop(
 		:input => "bigrams",
-		:output => "bigram_first_elem_frequency",
+		:output => "bigram_first_elem_freq",
 		:mapper => "#{B}/first_component_freq.rb",
 		:reducer => "aggregate"
 		)
@@ -178,7 +202,7 @@ end
 
 task :markov_chain do
 	run hadoop(
-		:input => "bigram_first_elem_frequency bigram_keyed_by_first_elem",
+		:input => "bigram_first_elem_freq bigram_keyed_by_first_elem",
 		:output => "markov_chain",
 		:reducer => "#{B}/join_markov_chain.rb",
 		:join => true
@@ -193,28 +217,28 @@ task :trigrams_exploded_as_bigrams do
 		)
 end
 
-task :trigram_markov_frequency do
+task :trigram_markov_freq do
 	run hadoop(
 		:input => "markov_chain trigrams_exploded_as_bigrams", 
-		:output => "trigram_markov_frequency",
+		:output => "trigram_markov_freq",
 		:reducer => "#{B}/join_trigram_markov_frequency.rb",
 		:join => true
 		)
 end
 
-task :trigram_frequency_sum do
+task :trigram_freq_sum do
 	run hadoop(
-		:input => "trigram_mle_frequency trigram_markov_frequency", 
-		:output => "trigram_frequency_sum",
+		:input => "trigram_mle_freq trigram_markov_freq", 
+		:output => "trigram_freq_sum",
 		:mapper => "#{B}/double_value_sum.rb",
 		:reducer => "aggregate"
 		)
 end
 
-task :least_frequent_trigrams do
+task :least_freq_trigrams do
 	run hadoop( 
-		:input => "trigram_frequency_sum",
-		:output => "least_frequent_trigrams",
+		:input => "trigram_freq_sum",
+		:output => "least_freq_trigrams",
 		:mapper => "#{B}/least_frequent_trigrams_map.rb",
 		:reducer => "#{B}/least_frequent_trigrams_reduce.rb",
 		:extra_files => ["top_n.rb"]

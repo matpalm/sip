@@ -3,9 +3,14 @@ data from project gutenberg, runs using hadoop streaming with ruby map/reduce fu
 
 see project page at http://matpalm.com/sip
 
-bash> start-hadoop-here
+bash> <start-hadoop-here/>
 bash> rake prepare_files input=input.eg # upload 8 file example
 bash> rake upload_input
 bash> rake calculate_sips 
-bash> rake cat dir=least_frequent_trigrams
-bash> # bask in glow of diysips
+bash> rake cat dir=least_freq_trigrams
+bash> # bask in glow of diy-sips
+bash> zcat hadoop-input/*gz | ./calc_sips_simple.rb
+bash> # be amazed by how much faster it was to NOT use hadoop
+
+coming soon: running in the cloud, when does hadoop become worth it...
+
