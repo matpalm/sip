@@ -7,12 +7,12 @@ STDIN.each do |record|
 	record =~ /(.*)\t(.*?) (.*)/
 	doc,freq,trigram = $1, $2.to_f, $3
 	if doc != processing_doc		
-		puts "#{processing_doc}\t#{top_n.top.inspect}" if processing_doc != nil
+		puts "#{processing_doc}\t#{top_n.keys.inspect}" if processing_doc != nil
 		processing_doc = doc
 		top_n = TopN.new 10
 	else
 		top_n.add trigram, freq
 	end
 end			
-puts "#{processing_doc}\t#{top_n.top.inspect}" if top_n # possibility exists that a partition will be empty
+puts "#{processing_doc}\t#{top_n.keys.inspect}" if top_n # possibility exists that a partition will be empty
 

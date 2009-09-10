@@ -27,6 +27,11 @@ class TopN
 		@top = @top.sort{|a,b| a[1] <=> b[1]}
 		@max_value = @top.last[1]
 	end
+
+	def keys
+		@top.collect { |e| e.first }
+	end
+
 end
 
 =begin

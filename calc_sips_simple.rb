@@ -165,8 +165,8 @@ def prob_of sip_mle, sip_markov
 #	sip_mle.sum + sip_markov.sum # sumtastic
 end
 
-puts "total_num_terms #{term_freq.total_num_terms}"
-puts "unique_terms #{term_freq.unique_terms}"
+#puts "total_num_terms #{term_freq.total_num_terms}"
+#puts "unique_terms #{term_freq.unique_terms}"
 
 # iterate over each document's trigrams remembering the least likely
 documents.each do |doc_id, terms|	
@@ -180,5 +180,5 @@ documents.each do |doc_id, terms|
 		trigram_as_terms = term_to_idx.ids_to_terms(trigram).join(' ')
 		top_sips.add trigram_as_terms, sip
 	end
-	puts "doc #{doc_id} #{top_sips.top.inspect}"
+	puts "#{doc_id}\t#{top_sips.keys.inspect}"
 end
