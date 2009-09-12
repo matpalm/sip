@@ -33,6 +33,7 @@ def hadoop args
 	# props need to be here for at least v0.19
 	# for v0.18 they need to be at end
 	props = []
+	props += ["mapred.job.name=#{args[:name]}"] if args[:name]
 	if args[:join]
 			props += ["stream.map.output.field.seperator=.", "stream.num.map.output.key.fields=2", "map.output.key.field.separator=."]
 			props << "num.key.fields.for.partition=1" # hadoop 0.18.3
@@ -129,6 +130,7 @@ task :calculate_sips => [	# arbitrary topological sorted order
 
 task :term_freq do
 	run hadoop(
+		:name => "term_freq",
 		:input => "input", 
 		:output => "term_freq", 
 		:mapper => "#{B}/emit_terms.rb",
@@ -138,6 +140,7 @@ end
 
 task :total_num_terms do
 	run hadoop( 
+		:name => "total_num_terms",
 		:input => "term_freq", 
 		:output => "total_num_terms", 
 		:mapper => "#{B}/count_total_num_terms.rb",
@@ -147,6 +150,7 @@ end
 
 task :trigrams do
 	run hadoop( 
+		:name => "trigrams",
 		:input => "input",
 		:output => "trigrams", 
 		:mapper => "#{B}/emit_ngrams.rb",
@@ -157,6 +161,7 @@ end
 
 task :exploded_trigrams do
 	run hadoop(
+		:name => "exploded_trigrams",
 		:input => "trigrams", 
 		:output => "exploded_trigrams",
 		:mapper => "#{B}/explode_ngrams.rb"
@@ -165,6 +170,7 @@ end
 
 task :trigram_mle_freq do
 	run hadoop(
+		:name => "trigram_mle_freq",
 		:input => "term_freq exploded_trigrams", 
 		:output => "trigram_mle_freq",
 		:reducer => "#{B}/join_trigram_frequency.rb",
@@ -175,6 +181,7 @@ end
 
 task :bigrams do
 	run hadoop(
+		:name => "bigrams",
 		:input => "input",
 		:output => "bigrams", 
 		:mapper => "#{B}/emit_ngrams.rb",
@@ -185,6 +192,7 @@ end
 
 task :bigram_keyed_by_first_elem do
 	run hadoop(
+		:name => "bigram_keyed_by_first_elem",
 		:input => "bigrams",
 		:output =>"bigram_keyed_by_first_elem",
 		:mapper =>"#{B}/emit_first_component_as_key.rb"
@@ -193,6 +201,7 @@ end
 
 task :bigram_first_elem_freq do
 	run hadoop(
+		:name => "bigram_first_elem_freq",
 		:input => "bigrams",
 		:output => "bigram_first_elem_freq",
 		:mapper => "#{B}/first_component_freq.rb",
@@ -202,6 +211,7 @@ end
 
 task :markov_chain do
 	run hadoop(
+		:name => "markov_chain",
 		:input => "bigram_first_elem_freq bigram_keyed_by_first_elem",
 		:output => "markov_chain",
 		:reducer => "#{B}/join_markov_chain.rb",
@@ -211,6 +221,7 @@ end
 
 task :trigrams_exploded_as_bigrams do
 	run hadoop(
+		:name => "trigrams_exploded_as_bigrams",
 		:input => "trigrams",
 		:output => "trigrams_exploded_as_bigrams", 
 		:mapper => "#{B}/explode_trigrams_as_bigrams.rb"
@@ -219,6 +230,7 @@ end
 
 task :trigram_markov_freq do
 	run hadoop(
+		:name => "trigram_markov_freq",
 		:input => "markov_chain trigrams_exploded_as_bigrams", 
 		:output => "trigram_markov_freq",
 		:reducer => "#{B}/join_trigram_markov_frequency.rb",
@@ -228,6 +240,7 @@ end
 
 task :trigram_freq_sum do
 	run hadoop(
+		:name => "trigram_freq_sum",
 		:input => "trigram_mle_freq trigram_markov_freq", 
 		:output => "trigram_freq_sum",
 		:mapper => "#{B}/double_value_sum.rb",
@@ -237,6 +250,7 @@ end
 
 task :least_freq_trigrams do
 	run hadoop( 
+		:name => "least_freq_trigrams",
 		:input => "trigram_freq_sum",
 		:output => "least_freq_trigrams",
 		:mapper => "#{B}/least_frequent_trigrams_map.rb",
